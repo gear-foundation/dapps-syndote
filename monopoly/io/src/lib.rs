@@ -2,24 +2,19 @@
 use gstd::{prelude::*, ActorId};
 
 #[derive(Encode, Decode, TypeInfo)]
-pub struct YourTurn {
-    pub players: BTreeMap<ActorId, PlayerInfo>,
-    pub properties: BTreeMap<u8, (Vec<Gear>, u32, u32)>,
-    pub ownership: BTreeMap<u8, ActorId>,
+pub enum StrategicAction {
+    YourTurn {
+        players: BTreeMap<ActorId, PlayerInfo>,
+        properties: BTreeMap<u8, (Vec<Gear>, u32, u32)>,
+    },
 }
 
 #[derive(Encode, Decode, TypeInfo)]
 pub enum GameAction {
-    StartRegistration,
-    Register {
-        player: ActorId,
-    },
+    Register,
     Play,
     ThrowRoll {
         pay_fine: bool,
-        properties_for_sale: Option<Vec<u8>>,
-    },
-    AddGear {
         properties_for_sale: Option<Vec<u8>>,
     },
     Upgrade {
@@ -36,7 +31,6 @@ pub enum GameAction {
 #[derive(Encode, Decode, TypeInfo)]
 pub enum GameEvent {
     Registered,
-    StartRegistration,
     GameFinished {
         winner: ActorId,
     },
@@ -46,16 +40,11 @@ pub enum GameEvent {
         players: BTreeMap<ActorId, PlayerInfo>,
         properties: BTreeMap<u8, (Vec<Gear>, u32, u32)>,
     },
-    Jail {
-        in_jail: bool,
-        position: u8,
-    },
 }
-#[derive(Default, Debug, Clone, Encode, Decode, TypeInfo)]
+#[derive(Default, Clone, Encode, Decode, TypeInfo)]
 pub struct PlayerInfo {
     pub position: u8,
     pub balance: u32,
-    pub debt: u32,
     pub in_jail: bool,
     pub round: u128,
     pub cells: BTreeSet<u8>,

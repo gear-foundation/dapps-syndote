@@ -1,11 +1,11 @@
 #![no_std]
-use gstd::{exec, msg, prelude::*, ActorId};
+use gstd::{debug, exec, msg, prelude::*, ActorId, ReservationId};
 pub const NUMBER_OF_CELLS: u8 = 40;
 pub const NUMBER_OF_PLAYERS: u8 = 4;
 pub const JAIL_POSITION: u8 = 10;
 pub const LOTTERY_POSITION: u8 = 20;
-pub const COST_FOR_UPGRADE: u32 = 10;
-pub const FINE: u32 = 10;
+pub const COST_FOR_UPGRADE: u32 = 500;
+pub const FINE: u32 = 1_000;
 pub const PENALTY: u8 = 5;
 pub const INITIAL_BALANCE: u32 = 15_000;
 pub const NEW_CIRCLE: u32 = 2_000;
@@ -14,6 +14,10 @@ pub mod strategic_actions;
 pub mod utils;
 use monopoly_io::*;
 use utils::*;
+pub mod messages;
+use messages::*;
+const RESERVATION_AMOUNT: u64 = 240_000_000_000;
+const GAS_FOR_ROUND: u64 = 70_000_000_000;
 
 #[derive(Clone, Default, Encode, Decode, TypeInfo)]
 pub struct Game {
@@ -22,39 +26,56 @@ pub struct Game {
     round: u128,
     players: BTreeMap<ActorId, PlayerInfo>,
     players_queue: Vec<ActorId>,
-    current_turn: u8,
+    current_player: ActorId,
+    current_step: u64,
     // mapping from cells to built properties,
-    properties: BTreeMap<u8, (Vec<Gear>, u32, u32)>,
+    properties: Vec<(Vec<Gear>, u32, u32)>,
     // mapping from cells to accounts who have properties on it
-    ownership: BTreeMap<u8, ActorId>,
+    ownership: Vec<ActorId>,
     game_status: GameStatus,
-    number_of_players: u8,
     winner: ActorId,
 }
 
 static mut GAME: Option<Game> = None;
+static mut RESERVATION: Option<Vec<ReservationId>> = None;
 
 impl Game {
-    fn register(&mut self) {
-        assert_eq!(
-            self.game_status,
-            GameStatus::Registration,
-            "Game must be in registration status"
-        );
+    fn reserve_gas(&self) {
+        unsafe {
+            let reservation_id = ReservationId::reserve(RESERVATION_AMOUNT, 864000)
+                .expect("reservation across executions");
+            let reservations = RESERVATION.get_or_insert(Default::default());
+            reservations.push(reservation_id);
+        }
+    }
+    fn start_registration(&mut self) {
+        self.check_status(GameStatus::Finished);
+        self.only_admin();
+        let mut game: Game = Game {
+            admin: self.admin,
+            ..Default::default()
+        };
+        init_properties(&mut game.properties, &mut game.ownership);
+        *self = game;
+        msg::reply(GameEvent::StartRegistration, 0)
+            .expect("Error in sending a reply `GameEvent::StartRegistration");
+    }
+
+    fn register(&mut self, player: &ActorId) {
+        self.check_status(GameStatus::Registration);
         assert!(
-            !self.players.contains_key(&msg::source()),
+            !self.players.contains_key(player),
             "You have already registered"
         );
         self.players.insert(
-            msg::source(),
+            *player,
             PlayerInfo {
                 balance: INITIAL_BALANCE,
                 ..Default::default()
             },
         );
-        self.players_queue.push(msg::source());
-        self.number_of_players += 1;
-        if self.number_of_players == NUMBER_OF_PLAYERS {
+        self.players_queue.push(*player);
+        if self.players_queue.len() == NUMBER_OF_PLAYERS as usize {
             self.game_status = GameStatus::Play;
         }
         msg::reply(GameEvent::Registered, 0)
@@ -62,16 +83,25 @@ impl Game {
     }
 
     async fn play(&mut self) {
-        assert_eq!(
-            self.game_status,
-            GameStatus::Play,
-            "GameStatus must be `Play`"
-        );
-        assert_eq!(msg::source(), self.admin, "Only admin can start the game");
+        self.check_status(GameStatus::Play);
+        self.only_admin();
 
         let mut number_of_players = NUMBER_OF_PLAYERS;
+
         while self.game_status == GameStatus::Play {
-            self.round = self.round.wrapping_add(1);
+
+            if exec::gas_available() <= GAS_FOR_ROUND{
+                // debug!("GAS RESERVATION");
+                 unsafe {
+                     let reservations = RESERVATION.get_or_insert(Default::default());
+                     let id = if let Some(id) =  reservations.pop() {
+                         id
+                     } else {
+                         panic!("GIVE ME MORE GAS");
+                     };
+                     id.unreserve().expect("unreservation across executions");
+                 }
+             }
             if number_of_players == 1 {
                 self.winner = self.players_queue[0];
                 self.game_status = GameStatus::Finished;
@@ -84,116 +114,95 @@ impl Game {
                 .expect("Error in sending a reply `GameEvent::GameFinished`");
                 break;
             }
-            for _i in 0..number_of_players {
-                let state = self.clone();
-                let player = self.players_queue[self.current_turn as usize];
+            // check penalty and debt of the players for the previous round
+            // if penalty is equal to 5 points we remove the player from the game
+            // if a player has a debt and he has not enough balance to pay it
+            // he is also removed from the game
+            bankrupt_and_penalty(
+                &self.admin,
+                &mut self.players,
+                &mut self.players_queue,
+                &mut number_of_players,
+                &mut self.properties,
+                &mut self.properties_in_bank,
+                &mut self.ownership,
+            );
+
+        //    debug!("ROUND {:?} {:?}", self.round, number_of_players);
+            self.round = self.round.wrapping_add(1);
+
+            for player in self.players_queue.clone() {
+                self.current_player = player;
+                self.current_step += 1;
+                // we save the state before the player's step in case
+                // the player's contract does not reply or is executed with a panic.
+                // Then we roll back all the changes that the player could have made.
+              let mut state = self.clone();
                 let player_info = self
                     .players
                     .get_mut(&player)
                     .expect("Cant be None: Get Player");
-                if player_info.in_jail {
-                    let reply = msg::send_for_reply(
-                        player,
-                        StrategicAction::YourTurn {
-                            players: state.players.clone(),
-                            properties: state.properties.clone(),
-                        },
-                        0,
-                    )
-                    .expect("Error on sending `StrategicAction::YourTurn` message")
-                    .up_to(Some(WAIT_DURATION))
-                    .expect("Invalid wait duration.")
-                    .await;
 
-                    if reply.is_err() {
-                        // if the message to a player was invalid we have to restore the state
-                        *self = state;
-                        self.players.remove(&player);
-                        self.players_queue.retain(|&p| p != player);
-                        number_of_players -= 1;
-                        if self.number_of_players == 1 {
-                            self.winner = self.players_queue[0];
-                            self.game_status = GameStatus::Finished;
-                            msg::reply(
-                                GameEvent::GameFinished {
-                                    winner: self.winner,
-                                },
-                                0,
-                            )
-                            .expect("Error in sending a reply `GameEvent::GameFinished`");
-                        }
-                    } else {
-                        player_info.round = self.round;
-                        self.current_turn = (self.current_turn + 1) % self.number_of_players;
-                    }
+                // if a player is in jail we don't throw rolls for him
+                let position = if player_info.in_jail {
+                    player_info.position
                 } else {
                     let (r1, r2) = get_rolls();
+                    //     debug!("ROOLS {:?} {:?}", r1, r2);
                     let roll_sum = r1 + r2;
-                    let position = (player_info.position + roll_sum) % NUMBER_OF_CELLS;
-                    player_info.position = position;
-                    player_info.in_jail = position == JAIL_POSITION;
-                    match position {
-                        0 => {
-                            player_info.balance += NEW_CIRCLE;
-                            player_info.round = self.round;
-                            self.current_turn = (self.current_turn + 1) % self.number_of_players;
-                        }
-                        LOTTERY_POSITION => {
-                            let reward = lottery();
-                            player_info.balance += reward;
-                            player_info.round = self.round;
-                            self.current_turn = (self.current_turn + 1) % self.number_of_players;
-                        }
-                        _ => {
-                            let reply = msg::send_for_reply(
-                                player,
-                                StrategicAction::YourTurn {
-                                    players: state.players.clone(),
-                                    properties: state.properties.clone(),
-                                },
-                                0,
-                            )
-                            .expect("Error on sending `StrategicAction::YourTurn` message")
-                            .up_to(Some(WAIT_DURATION))
-                            .expect("Invalid wait duration.")
-                            .await;
+                    (player_info.position + roll_sum) % NUMBER_OF_CELLS
+                };
 
-                            if reply.is_err() {
-                                // if the message to a player was invalid we have to restore the state
-                                *self = state;
-                                self.players.remove(&player);
-                                self.number_of_players -= 1;
-                                self.players_queue.retain(|&p| p != player);
-                                if self.number_of_players == 1 {
-                                    self.winner = self.players_queue[0];
-                                    self.game_status = GameStatus::Finished;
-                                    msg::reply(
-                                        GameEvent::GameFinished {
-                                            winner: self.winner,
-                                        },
-                                        0,
-                                    )
-                                    .expect("Error in sending a reply `GameEvent::GameFinished`");
-                                    break;
-                                }
-                            } else {
-                                player_info.round = self.round;
-                                self.current_turn =
-                                    (self.current_turn + 1) % self.number_of_players;
-                            }
+                // If a player is on a cell that belongs to another player
+                // we write down a debt on him in the amount of the rent.
+                // This is done in order to penalize the participant's contract
+                // if he misses the rent
+                let account = self.ownership[position as usize];
+                if account != player && account != ActorId::zero(){
+                    let (_, _, rent) = self.properties[position as usize];
+                    player_info.debt = rent;
+                }
+                player_info.position = position;
+                player_info.in_jail = position == JAIL_POSITION;
+                state.players.insert(player, player_info.clone());
+                match position {
+                    0 => {
+                        player_info.balance += NEW_CIRCLE;
+                        player_info.round = self.round;
+                    }
+                    // free cells: TODO as a task on hackathon
+                    20 | 30 => {
+                        player_info.round = self.round;
+                    }
+                    _ => {
+                        let reply = take_your_turn(&player, &state).await;
+
+                        if reply.is_err() {
+                            // if the message to a player was invalid we have to restore the state
+                            // and give the maximum penalty to the player
+                            // state
+                            //     .players
+                            //     .entry(player)
+                            //     .and_modify(|player_info| player_info.penalty = PENALTY);
+                            // *self = state;
+                            player_info.penalty = PENALTY;
                         }
                     }
                 }
+
                 msg::send(
                     self.admin,
                     GameEvent::Step {
                         players: self.players.clone(),
                         properties: self.properties.clone(),
+                        current_player: self.current_player,
+                        current_step: self.current_step,
+                        ownership: self.ownership.clone(),
                     },
                     0,
                 )
                 .expect("Error in sending a message `GameEvent::Step`");
-            }
+           }
         }
     }
 }
@@ -203,12 +212,17 @@ async fn main() {
     let action: GameAction = msg::load().expect("Could not load `GameAction`");
     let game: &mut Game = unsafe { GAME.get_or_insert(Default::default()) };
     match action {
-        GameAction::Register => game.register(),
+        GameAction::Register { player } => game.register(&player),
+        GameAction::ReserveGas => game.reserve_gas(),
+        GameAction::StartRegistration => game.start_registration(),
         GameAction::Play => game.play().await,
         GameAction::ThrowRoll {
             pay_fine,
             properties_for_sale,
         } => game.throw_roll(pay_fine, properties_for_sale),
+        GameAction::AddGear {
+            properties_for_sale,
+        } => game.add_gear(properties_for_sale),
         GameAction::Upgrade {
             properties_for_sale,
         } => game.upgrade(properties_for_sale),
@@ -230,10 +244,11 @@ extern "C" fn meta_state() -> *mut [i32; 2] {
 
 #[no_mangle]
 unsafe extern "C" fn init() {
-    let game = Game {
+    let mut game = Game {
         admin: msg::source(),
         ..Default::default()
     };
+    init_properties(&mut game.properties, &mut game.ownership);
     GAME = Some(game);
 }
 

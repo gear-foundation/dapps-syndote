@@ -30,6 +30,9 @@ pub fn get_player_info<'a>(
     }
     let player_info = players.get_mut(player).expect("Cant be None: Get Player");
     if player_info.round >= current_round {
+
+
+
      //   debug!("PENALTY: MOVE ALREADY MADE");
         player_info.penalty += 1;
         return Err(());
@@ -38,6 +41,7 @@ pub fn get_player_info<'a>(
 }
 
 pub fn sell_property(
+    admin: &ActorId,
     ownership: &mut Vec<ActorId>,
     properties_for_sale: &Vec<u8>,
     properties_in_bank: &mut BTreeSet<u8>,
@@ -60,7 +64,7 @@ pub fn sell_property(
         let (_, price, _) = properties[*property as usize];
         player_info.cells.remove(property);
         player_info.balance += price / 2;
-        //   ownership.insert(property, );
+        ownership[*property as usize] = *admin;
         properties_in_bank.insert(*property);
     }
     Ok(())
@@ -100,7 +104,7 @@ pub fn bankrupt_and_penalty(
                 let (_, price, _) = &properties[*cell as usize];
                 player_info.balance += price / 2;
                 player_info.cells.remove(cell);
-                ownership.insert(*cell as usize, *admin);
+                ownership[*cell as usize] = *admin;
                 properties_in_bank.insert(*cell);
             }
         }
@@ -112,7 +116,7 @@ pub fn bankrupt_and_penalty(
             players_queue.retain(|&p| p != player);
             *number_of_players -= 1;
             for cell in &player_info.cells.clone() {
-                ownership.insert(*cell as usize, *admin);
+                ownership[*cell as usize] = *admin;
                 properties_in_bank.insert(*cell);
             }
             players.insert(player, player_info);

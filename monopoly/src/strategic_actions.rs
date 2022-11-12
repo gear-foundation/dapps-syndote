@@ -24,6 +24,7 @@ impl Game {
 
         if let Some(properties) = properties_for_sale {
             if sell_property(
+                &self.admin,
                 &mut self.ownership,
                 &properties,
                 &mut self.properties_in_bank,
@@ -74,6 +75,7 @@ impl Game {
 
         if let Some(properties) = properties_for_sale {
             if sell_property(
+                &self.admin,
                 &mut self.ownership,
                 &properties,
                 &mut self.properties_in_bank,
@@ -134,6 +136,7 @@ impl Game {
 
         if let Some(properties) = properties_for_sale {
             if sell_property(
+                &self.admin,
                 &mut self.ownership,
                 &properties,
                 &mut self.properties_in_bank,
@@ -212,6 +215,7 @@ impl Game {
 
         if let Some(properties) = properties_for_sale {
             if sell_property(
+                &self.admin,
                 &mut self.ownership,
                 &properties,
                 &mut self.properties_in_bank,
@@ -242,9 +246,10 @@ impl Game {
             reply_strategic_error();
             return;
         }
+
         player_info.balance -= price;
         player_info.cells.insert(position);
-        self.ownership.insert(position as usize, msg::source());
+        self.ownership[position as usize] = msg::source();
         player_info.round = self.round;
         reply_strategic_success();
     }
@@ -261,6 +266,7 @@ impl Game {
         };
         if let Some(properties) = properties_for_sale {
             if sell_property(
+                &self.admin,
                 &mut self.ownership,
                 &properties,
                 &mut self.properties_in_bank,

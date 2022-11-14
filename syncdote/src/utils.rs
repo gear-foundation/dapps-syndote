@@ -42,7 +42,7 @@ pub fn sell_property(
     ownership: &mut [ActorId],
     properties_for_sale: &Vec<u8>,
     properties_in_bank: &mut BTreeSet<u8>,
-    properties: &[Option<(ActorId, Vec<Gear>, u32, u32)>],
+    properties: &[Option<(ActorId, Gears, u32, u32)>],
     player_info: &mut PlayerInfo,
 ) -> Result<(), GameError> {
     for property in properties_for_sale {
@@ -80,7 +80,7 @@ pub fn bankrupt_and_penalty(
     admin: &ActorId,
     players: &mut BTreeMap<ActorId, PlayerInfo>,
     players_queue: &mut Vec<ActorId>,
-    properties: &mut [Option<(ActorId, Vec<Gear>, u32, u32)>],
+    properties: &mut [Option<(ActorId, Gears, Price, Rent)>],
     properties_in_bank: &mut BTreeSet<u8>,
     ownership: &mut [ActorId],
 ) {
@@ -118,7 +118,7 @@ pub fn bankrupt_and_penalty(
 }
 
 pub fn init_properties(
-    properties: &mut Vec<Option<(ActorId, Vec<Gear>, u32, u32)>>,
+    properties: &mut Vec<Option<(ActorId, Gears, Price, Rent)>>,
     ownership: &mut Vec<ActorId>,
 ) {
     // 0

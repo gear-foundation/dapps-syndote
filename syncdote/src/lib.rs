@@ -1,5 +1,5 @@
 #![no_std]
-use gstd::{debug, exec, msg, prelude::*, ActorId, ReservationId};
+use gstd::{exec, msg, prelude::*, ActorId, ReservationId};
 pub const NUMBER_OF_CELLS: u8 = 40;
 pub const NUMBER_OF_PLAYERS: u8 = 4;
 pub const JAIL_POSITION: u8 = 10;
@@ -29,7 +29,7 @@ pub struct Game {
     current_player: ActorId,
     current_step: u64,
     // mapping from cells to built properties,
-    properties: Vec<Option<(ActorId, Vec<Gear>, u32, u32)>>,
+    properties: Vec<Option<(ActorId, Gears, u32, u32)>>,
     // mapping from cells to accounts who have properties on it
     ownership: Vec<ActorId>,
     game_status: GameStatus,

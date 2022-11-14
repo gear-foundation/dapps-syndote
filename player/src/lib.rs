@@ -1,7 +1,7 @@
 #![no_std]
-use gstd::{debug, exec, msg, prelude::*, ActorId};
+use gstd::{exec, msg, prelude::*, ActorId};
 use syncdote_io::*;
-static mut MONOPOLY: ActorId = ActorId::zero();
+//static mut MONOPOLY: ActorId = ActorId::zero();
 pub const COST_FOR_UPGRADE: u32 = 500;
 pub const FINE: u32 = 1_000;
 

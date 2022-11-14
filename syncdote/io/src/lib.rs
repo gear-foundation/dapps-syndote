@@ -2,11 +2,11 @@
 use gstd::{prelude::*, ActorId};
 pub type Price = u32;
 pub type Rent = u32;
-
+pub type Gears = Vec<Gear>;
 #[derive(Encode, Decode, TypeInfo)]
 pub struct YourTurn {
     pub players: BTreeMap<ActorId, PlayerInfo>,
-    pub properties: Vec<Option<(ActorId, Vec<Gear>, Price, Rent)>>,
+    pub properties: Vec<Option<(ActorId, Gears, Price, Rent)>>,
 }
 
 #[derive(Encode, Decode, TypeInfo)]
@@ -46,7 +46,7 @@ pub enum GameEvent {
     StrategicSuccess,
     Step {
         players: BTreeMap<ActorId, PlayerInfo>,
-        properties: Vec<Option<(ActorId, Vec<Gear>, Price, Rent)>>,
+        properties: Vec<Option<(ActorId, Gears, Price, Rent)>>,
         current_player: ActorId,
         ownership: Vec<ActorId>,
         current_step: u64,

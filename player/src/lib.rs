@@ -1,7 +1,7 @@
 #![no_std]
-use gstd::{exec,debug, msg, prelude::*, ActorId};
-use monopoly_io::*;
-// static mut MONOPOLY: ActorId = ActorId::zero();
+use gstd::{debug, exec, msg, prelude::*, ActorId};
+use syncdote_io::*;
+static mut MONOPOLY: ActorId = ActorId::zero();
 pub const COST_FOR_UPGRADE: u32 = 500;
 pub const FINE: u32 = 1_000;
 
@@ -33,17 +33,13 @@ async fn main() {
             .await
             .expect("Unable to decode `GameEvent");
 
-            match reply {
-                GameEvent::Jail { in_jail, position } => {
-                    if !in_jail {
-                        my_player.position = position;
-                    } else {
-
-                        msg::reply("", 0).expect("Error in sending a reply to monopoly contract");
-                        return;
-                    }
+            if let GameEvent::Jail { in_jail, position } = reply {
+                if !in_jail {
+                    my_player.position = position;
+                } else {
+                    msg::reply("", 0).expect("Error in sending a reply to monopoly contract");
+                    return;
                 }
-                _ => {}
             }
         } else {
             msg::send_for_reply_as::<_, GameEvent>(
@@ -58,18 +54,26 @@ async fn main() {
             .await
             .expect("Unable to decode `GameEvent");
 
-
-
             msg::reply("", 0).expect("Error in sending a reply to monopoly contract");
             return;
         }
     }
 
     let position = my_player.position;
-    let my_cell = my_player.cells.contains(&position);
+
+    // debug!("BALANCE {:?}", my_player.balance);
+    let (my_cell, free_cell, gears) =
+        if let Some((account, gears, _, _)) = &message.properties[position as usize] {
+            let my_cell = account == &exec::program_id();
+            let free_cell = account == &ActorId::zero();
+            (my_cell, free_cell, gears)
+        } else {
+            msg::reply("", 0).expect("Error in sending a reply to monopoly contract");
+            return;
+        };
+
     if my_cell {
-     //   debug!("ADD GEAR");
-        let (gears, _, _) = &mut message.properties[position as usize];
+        //debug!("ADD GEAR");
         if gears.len() < 3 {
             msg::send_for_reply_as::<_, GameEvent>(
                 monopoly_id,
@@ -84,7 +88,7 @@ async fn main() {
             msg::reply("", 0).expect("Error in sending a reply to monopoly contract");
             return;
         } else {
-          //  debug!("UPGRADE");
+            //debug!("UPGRADE");
             msg::send_for_reply_as::<_, GameEvent>(
                 monopoly_id,
                 GameAction::Upgrade {
@@ -99,9 +103,8 @@ async fn main() {
             return;
         }
     }
-    let free_cell = message.ownership[position as usize] == ActorId::zero();
     if free_cell {
-        debug!("BUY CELL");
+        //debug!("BUY CELL");
         msg::send_for_reply_as::<_, GameEvent>(
             monopoly_id,
             GameAction::BuyCell {
@@ -112,7 +115,8 @@ async fn main() {
         .expect("Error in sending a message `GameAction::BuyCell`")
         .await
         .expect("Unable to decode `GameEvent");
-    } else {
+    } else if !my_cell {
+        //debug!("PAY RENT");
         msg::send_for_reply_as::<_, GameEvent>(
             monopoly_id,
             GameAction::PayRent {

@@ -7,7 +7,6 @@ pub async fn take_your_turn(player: &ActorId, game: &Game) -> Result<Vec<u8>, Co
         YourTurn {
             players: game.players.clone(),
             properties: game.properties.clone(),
-            ownership: game.ownership.clone(),
         },
         0,
     )

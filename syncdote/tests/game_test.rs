@@ -1,6 +1,6 @@
 use gstd::{prelude::*, ActorId};
 use gtest::{Program, System};
-use monopoly_io::*;
+use syncdote_io::*;
 
 #[test]
 fn game() {

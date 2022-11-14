@@ -1,11 +1,12 @@
 #![no_std]
 use gstd::{prelude::*, ActorId};
+pub type Price = u32;
+pub type Rent = u32;
 
 #[derive(Encode, Decode, TypeInfo)]
 pub struct YourTurn {
     pub players: BTreeMap<ActorId, PlayerInfo>,
-    pub properties: Vec<(Vec<Gear>, u32, u32)>,
-    pub ownership: Vec<ActorId>,
+    pub properties: Vec<Option<(ActorId, Vec<Gear>, Price, Rent)>>,
 }
 
 #[derive(Encode, Decode, TypeInfo)]
@@ -45,7 +46,7 @@ pub enum GameEvent {
     StrategicSuccess,
     Step {
         players: BTreeMap<ActorId, PlayerInfo>,
-        properties: Vec<(Vec<Gear>, u32, u32)>,
+        properties: Vec<Option<(ActorId, Vec<Gear>, Price, Rent)>>,
         current_player: ActorId,
         ownership: Vec<ActorId>,
         current_step: u64,
@@ -54,6 +55,8 @@ pub enum GameEvent {
         in_jail: bool,
         position: u8,
     },
+    GasReserved,
+    NextRoundFromReservation,
 }
 #[derive(Default, Debug, Clone, Encode, Decode, TypeInfo)]
 pub struct PlayerInfo {
@@ -67,9 +70,9 @@ pub struct PlayerInfo {
     pub lost: bool,
 }
 
-#[derive(PartialEq, Encode, Decode, Clone, TypeInfo)]
+#[derive(PartialEq, Eq, Encode, Decode, Clone, TypeInfo, Copy)]
 pub enum Gear {
-    Platinum,
+    Bronze,
     Silver,
     Gold,
 }
@@ -77,14 +80,14 @@ pub enum Gear {
 impl Gear {
     pub fn upgrade(&self) -> Self {
         match *self {
-            Self::Platinum => Self::Silver,
+            Self::Bronze => Self::Silver,
             Self::Silver => Self::Gold,
             Self::Gold => Self::Gold,
         }
     }
 }
 
-#[derive(Debug, PartialEq, Clone, TypeInfo, Encode, Decode)]
+#[derive(Debug, PartialEq, Eq, Clone, TypeInfo, Encode, Decode)]
 pub enum GameStatus {
     Registration,
     Play,

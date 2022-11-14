@@ -12,12 +12,12 @@ pub const NEW_CIRCLE: u32 = 2_000;
 pub const WAIT_DURATION: u32 = 5;
 pub mod strategic_actions;
 pub mod utils;
-use monopoly_io::*;
+use syncdote_io::*;
 use utils::*;
 pub mod messages;
 use messages::*;
-const RESERVATION_AMOUNT: u64 = 240_000_000_000;
-const GAS_FOR_ROUND: u64 = 70_000_000_000;
+const RESERVATION_AMOUNT: u64 = 245_000_000_000;
+const GAS_FOR_ROUND: u64 = 60_000_000_000;
 
 #[derive(Clone, Default, Encode, Decode, TypeInfo)]
 pub struct Game {
@@ -29,7 +29,7 @@ pub struct Game {
     current_player: ActorId,
     current_step: u64,
     // mapping from cells to built properties,
-    properties: Vec<(Vec<Gear>, u32, u32)>,
+    properties: Vec<Option<(ActorId, Vec<Gear>, u32, u32)>>,
     // mapping from cells to accounts who have properties on it
     ownership: Vec<ActorId>,
     game_status: GameStatus,
@@ -47,6 +47,7 @@ impl Game {
             let reservations = RESERVATION.get_or_insert(Default::default());
             reservations.push(reservation_id);
         }
+        msg::reply(GameEvent::GasReserved, 0).expect("");
     }
     fn start_registration(&mut self) {
         self.check_status(GameStatus::Finished);
@@ -83,26 +84,42 @@ impl Game {
     }
 
     async fn play(&mut self) {
-        self.check_status(GameStatus::Play);
-        self.only_admin();
-
-        let mut number_of_players = NUMBER_OF_PLAYERS;
+        //self.check_status(GameStatus::Play);
+        assert!(
+            msg::source() == self.admin || msg::source() == exec::program_id(),
+            "Only admin or the program can send that message"
+        );
 
         while self.game_status == GameStatus::Play {
+            if exec::gas_available() <= GAS_FOR_ROUND {
+                unsafe {
+                    let reservations = RESERVATION.get_or_insert(Default::default());
+                    if let Some(id) = reservations.pop() {
+                        msg::send_from_reservation(id, exec::program_id(), GameAction::Play, 0)
+                            .expect("Failed to send message");
+                        msg::reply(GameEvent::NextRoundFromReservation, 0).expect("");
 
-            if exec::gas_available() <= GAS_FOR_ROUND{
-                // debug!("GAS RESERVATION");
-                 unsafe {
-                     let reservations = RESERVATION.get_or_insert(Default::default());
-                     let id = if let Some(id) =  reservations.pop() {
-                         id
-                     } else {
-                         panic!("GIVE ME MORE GAS");
-                     };
-                     id.unreserve().expect("unreservation across executions");
-                 }
-             }
-            if number_of_players == 1 {
+                        break;
+                    } else {
+                        panic!("GIVE ME MORE GAS");
+                    };
+                }
+            }
+
+            // check penalty and debt of the players for the previous round
+            // if penalty is equal to 5 points we remove the player from the game
+            // if a player has a debt and he has not enough balance to pay it
+            // he is also removed from the game
+            bankrupt_and_penalty(
+                &self.admin,
+                &mut self.players,
+                &mut self.players_queue,
+                &mut self.properties,
+                &mut self.properties_in_bank,
+                &mut self.ownership,
+            );
+
+            if self.players_queue.len() <= 1 {
                 self.winner = self.players_queue[0];
                 self.game_status = GameStatus::Finished;
                 msg::reply(
@@ -114,30 +131,14 @@ impl Game {
                 .expect("Error in sending a reply `GameEvent::GameFinished`");
                 break;
             }
-            // check penalty and debt of the players for the previous round
-            // if penalty is equal to 5 points we remove the player from the game
-            // if a player has a debt and he has not enough balance to pay it
-            // he is also removed from the game
-            bankrupt_and_penalty(
-                &self.admin,
-                &mut self.players,
-                &mut self.players_queue,
-                &mut number_of_players,
-                &mut self.properties,
-                &mut self.properties_in_bank,
-                &mut self.ownership,
-            );
-
-        //    debug!("ROUND {:?} {:?}", self.round, number_of_players);
             self.round = self.round.wrapping_add(1);
-
             for player in self.players_queue.clone() {
                 self.current_player = player;
                 self.current_step += 1;
                 // we save the state before the player's step in case
                 // the player's contract does not reply or is executed with a panic.
                 // Then we roll back all the changes that the player could have made.
-              let mut state = self.clone();
+                let mut state = self.clone();
                 let player_info = self
                     .players
                     .get_mut(&player)
@@ -158,9 +159,10 @@ impl Game {
                 // This is done in order to penalize the participant's contract
                 // if he misses the rent
                 let account = self.ownership[position as usize];
-                if account != player && account != ActorId::zero(){
-                    let (_, _, rent) = self.properties[position as usize];
-                    player_info.debt = rent;
+                if account != player && account != ActorId::zero() {
+                    if let Some((_, _, _, rent)) = self.properties[position as usize] {
+                        player_info.debt = rent;
+                    }
                 }
                 player_info.position = position;
                 player_info.in_jail = position == JAIL_POSITION;
@@ -170,21 +172,14 @@ impl Game {
                         player_info.balance += NEW_CIRCLE;
                         player_info.round = self.round;
                     }
-                    // free cells: TODO as a task on hackathon
-                    20 | 30 => {
+                    // free cells (it can be lottery or penalty): TODO as a task on hackathon
+                    2 | 4 | 7 | 16 | 20 | 30 | 33 | 36 | 38 => {
                         player_info.round = self.round;
                     }
                     _ => {
                         let reply = take_your_turn(&player, &state).await;
 
                         if reply.is_err() {
-                            // if the message to a player was invalid we have to restore the state
-                            // and give the maximum penalty to the player
-                            // state
-                            //     .players
-                            //     .entry(player)
-                            //     .and_modify(|player_info| player_info.penalty = PENALTY);
-                            // *self = state;
                             player_info.penalty = PENALTY;
                         }
                     }
@@ -202,7 +197,7 @@ impl Game {
                     0,
                 )
                 .expect("Error in sending a message `GameEvent::Step`");
-           }
+            }
         }
     }
 }
@@ -253,10 +248,20 @@ unsafe extern "C" fn init() {
 }
 
 gstd::metadata! {
-title: "MonopolyGame",
+title: "Syncdote",
     handle:
         input: GameAction,
         output: GameEvent,
    state:
        output: Game,
+}
+
+// TODO: possible realization with journal handling
+
+#[derive(Clone, Encode, Decode, TypeInfo)]
+pub enum Step {
+    BuyCell { cell: u8, account: ActorId },
+    AddGear { cell: u8 },
+    Upgrade { cell: u8 },
+    Sell { cell: u8 },
 }

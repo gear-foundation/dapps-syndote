@@ -12,7 +12,7 @@ pub const NEW_CIRCLE: u32 = 2_000;
 pub const WAIT_DURATION: u32 = 5;
 pub mod strategic_actions;
 pub mod utils;
-use syncdote_io::*;
+use syndote_io::*;
 use utils::*;
 pub mod messages;
 use messages::*;

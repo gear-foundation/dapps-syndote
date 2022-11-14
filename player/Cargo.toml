@@ -7,7 +7,7 @@ edition = "2021"
 gstd = { git = "https://github.com/gear-tech/gear.git", features = ["debug"] }
 codec = { package = "parity-scale-codec", version = "3.1.2", default-features = false }
 scale-info = { version = "2.2.0", default-features = false }
-syncdote-io = { path = "../syncdote/io" }
+syndote-io = { path = "../syndote/io" }
 
 [build-dependencies]
 gear-wasm-builder = { git = "https://github.com/gear-tech/gear.git" }

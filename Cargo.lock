@@ -705,7 +705,7 @@ dependencies = [
  "gstd",
  "parity-scale-codec",
  "scale-info",
- "syncdote-io",
+ "syndote-io",
 ]
 
 [[package]]
@@ -940,7 +940,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "syncdote"
+name = "syndote"
 version = "0.1.0"
 dependencies = [
  "gear-wasm-builder",
@@ -948,11 +948,11 @@ dependencies = [
  "gtest",
  "parity-scale-codec",
  "scale-info",
- "syncdote-io",
+ "syndote-io",
 ]
 
 [[package]]
-name = "syncdote-io"
+name = "syndote-io"
 version = "0.1.0"
 dependencies = [
  "gstd",

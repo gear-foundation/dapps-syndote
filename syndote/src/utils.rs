@@ -219,7 +219,11 @@ impl From<&Game> for GameState {
             admin: game.admin,
             properties_in_bank: game.properties_in_bank.iter().copied().collect(),
             round: game.round,
-            players: game.players.iter().map(|(key, value)| (*key, value.clone())).collect(),
+            players: game
+                .players
+                .iter()
+                .map(|(key, value)| (*key, value.clone()))
+                .collect(),
             players_queue: game.players_queue.clone(),
             current_player: game.current_player,
             current_step: game.current_step,

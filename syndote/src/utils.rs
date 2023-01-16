@@ -1,4 +1,6 @@
 use crate::*;
+use rand::{RngCore, SeedableRng};
+use rand_xoshiro::Xoshiro128PlusPlus;
 
 impl Game {
     pub fn check_status(&self, game_status: GameStatus) {
@@ -18,7 +20,7 @@ impl Game {
 
 pub fn get_player_info<'a>(
     player: &'a ActorId,
-    players: &'a mut BTreeMap<ActorId, PlayerInfo>,
+    players: &'a mut HashMap<ActorId, PlayerInfo>,
     current_round: u128,
 ) -> Result<&'a mut PlayerInfo, GameError> {
     if &msg::source() != player {
@@ -41,7 +43,7 @@ pub fn sell_property(
     admin: &ActorId,
     ownership: &mut [ActorId],
     properties_for_sale: &Vec<u8>,
-    properties_in_bank: &mut BTreeSet<u8>,
+    properties_in_bank: &mut HashSet<u8>,
     properties: &[Option<(ActorId, Gears, u32, u32)>],
     player_info: &mut PlayerInfo,
 ) -> Result<(), GameError> {
@@ -64,13 +66,10 @@ pub fn sell_property(
     Ok(())
 }
 
-static mut SEED: u64 = 0;
 pub fn get_rolls() -> (u8, u8) {
-    let seed = unsafe {
-        SEED = SEED.wrapping_add(1);
-        SEED
-    };
-    let random = exec::random(&(exec::block_timestamp() + seed).to_be_bytes()).expect("");
+    let mut random_input: [u8; 32] = [0; 32];
+    Xoshiro128PlusPlus::seed_from_u64(exec::block_timestamp()).fill_bytes(&mut random_input);
+    let random = exec::random(random_input).expect("");
     let r1: u8 = random.0[0] % 6 + 1;
     let r2: u8 = random.0[1] % 6 + 1;
     (r1, r2)
@@ -78,10 +77,10 @@ pub fn get_rolls() -> (u8, u8) {
 
 pub fn bankrupt_and_penalty(
     admin: &ActorId,
-    players: &mut BTreeMap<ActorId, PlayerInfo>,
+    players: &mut HashMap<ActorId, PlayerInfo>,
     players_queue: &mut Vec<ActorId>,
     properties: &mut [Option<(ActorId, Gears, Price, Rent)>],
-    properties_in_bank: &mut BTreeSet<u8>,
+    properties_in_bank: &mut HashSet<u8>,
     ownership: &mut [ActorId],
 ) {
     for (player, mut player_info) in players.clone() {
@@ -212,4 +211,22 @@ pub fn init_properties(
 
 pub enum GameError {
     StrategicError,
+}
+
+impl From<&Game> for GameState {
+    fn from(game: &Game) -> GameState {
+        GameState {
+            admin: game.admin,
+            properties_in_bank: game.properties_in_bank.iter().copied().collect(),
+            round: game.round,
+            players: game.players.iter().map(|(key, value)| (*key, value.clone())).collect(),
+            players_queue: game.players_queue.clone(),
+            current_player: game.current_player,
+            current_step: game.current_step,
+            properties: game.properties.clone(),
+            ownership: game.ownership.clone(),
+            game_status: game.game_status.clone(),
+            winner: game.winner,
+        }
+    }
 }

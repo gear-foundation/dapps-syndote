@@ -1,6 +1,5 @@
 use crate::*;
-use rand::{RngCore, SeedableRng};
-use rand_xoshiro::Xoshiro128PlusPlus;
+use core::array;
 
 impl Game {
     pub fn check_status(&self, game_status: GameStatus) {
@@ -67,11 +66,10 @@ pub fn sell_property(
 }
 
 pub fn get_rolls() -> (u8, u8) {
-    let mut random_input: [u8; 32] = [0; 32];
-    Xoshiro128PlusPlus::seed_from_u64(exec::block_timestamp()).fill_bytes(&mut random_input);
-    let random = exec::random(random_input).expect("");
-    let r1: u8 = random.0[0] % 6 + 1;
-    let r2: u8 = random.0[1] % 6 + 1;
+    let random_input: [u8; 32] = array::from_fn(|i| i as u8 + 1);
+    let (random, _) = exec::random(random_input).expect("Error in getting random number");
+    let r1: u8 = random[0] % 6 + 1;
+    let r2: u8 = random[1] % 6 + 1;
     (r1, r2)
 }
 

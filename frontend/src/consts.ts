@@ -44,7 +44,6 @@ enum LocalStorage {
   Account = 'account',
   Wallet = 'wallet',
   Player = 'player',
-  Steps = 'steps',
 }
 
 const fields = [

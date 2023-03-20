@@ -54,9 +54,7 @@ function Home() {
     return metadata.createType(output, payload).toJSON();
   };
 
-  const [steps, setSteps] = useState<Step[]>(
-    localStorage[LocalStorage.Steps] ? JSON.parse(localStorage[LocalStorage.Steps]) : [],
-  );
+  const [steps, setSteps] = useState<Step[]>([]);
   const isGameStarted = steps.length > 0;
 
   const [step, setStep] = useState(0);
@@ -139,10 +137,6 @@ function Home() {
       [...prevSteps].sort(({ currentStep }, { currentStep: anotherStep }) => +currentStep - +anotherStep),
     );
   }, [winner]);
-
-  useEffect(() => {
-    localStorage.setItem(LocalStorage.Steps, JSON.stringify(steps));
-  }, [steps]);
 
   return isStateRead ? (
     <>

@@ -1,7 +1,7 @@
 #![no_std]
 use gmeta::{InOut, Metadata};
-use syndote_io::YourTurn;
 use gstd::prelude::*;
+use syndote_io::YourTurn;
 pub struct PlayerMetadata;
 
 impl Metadata for PlayerMetadata {

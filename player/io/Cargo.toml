@@ -1,0 +1,11 @@
+[package]
+name = "player-io"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+gstd = { git = "https://github.com/gear-tech/gear.git", branch = "testnet", features = ["debug"] }
+scale-info = { version = "2", default-features = false }
+parity-scale-codec = { version = "3", default-features = false }
+gmeta = { git = "https://github.com/gear-tech/gear.git", branch = "testnet" }
+syndote-io = { path = "../../syndote/io" }

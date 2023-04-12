@@ -16,10 +16,3 @@ transactions:
   - type: upload_program
     program: 0
     account: Luisa
-
-  - type: send_message
-    program: 0
-    account: Luisa
-    payload:
-      ReserveGas: null
-    value: 0

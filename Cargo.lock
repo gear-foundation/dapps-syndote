@@ -814,6 +814,18 @@ dependencies = [
  "gear-wasm-builder",
  "gstd",
  "parity-scale-codec",
+ "player-io",
+ "scale-info",
+ "syndote-io",
+]
+
+[[package]]
+name = "player-io"
+version = "0.1.0"
+dependencies = [
+ "gmeta",
+ "gstd",
+ "parity-scale-codec",
  "scale-info",
  "syndote-io",
 ]

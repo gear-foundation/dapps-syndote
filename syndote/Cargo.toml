@@ -8,7 +8,7 @@ gstd = { git = "https://github.com/gear-tech/gear.git", rev = "5c685d0f15c412ab6
 codec = { package = "parity-scale-codec", version = "3", default-features = false }
 scale-info = { version = "2", default-features = false }
 syndote-io = { path = "io" }
-hashbrown = "0.13"
+hashbrown = "0.14"
 
 [dev-dependencies]
 gtest = { git = "https://github.com/gear-tech/gear.git", rev = "5c685d0f15c412ab6ee019ceaf7ce084426dfb68" }
